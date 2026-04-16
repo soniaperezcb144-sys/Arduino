@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fotoresistencia - Control de Iluminación con Arduino</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --teal:    #00d4d8;
+      --cyan:    #00f5ff;
+      --blue:    #0a4bff;
+      --orange:  #ff6b1a;
+      --amber:   #ffbe00;
+      --warm:    #ff4e1a;
+      --dark:    #050c1a;
+      --darker:  #020710;
+      --glass:   rgba(0,212,216,0.07);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background: var(--darker);
+      color: #e0f7fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Canvas background */
+    #bgCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Back button */
+    .btn-back {
+      position: fixed;
+      top: 2rem;
+      left: 2rem;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      letter-spacing: .08em;
+      color: var(--cyan);
+      background: rgba(0,212,216,.08);
+      border: 1px solid rgba(0,212,216,.3);
+      padding: .75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all .3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn-back:hover {
+      background: rgba(0,212,216,.15);
+      border-color: var(--cyan);
+      transform: translateX(-5px);
+      box-shadow: 0 4px 20px rgba(0,212,216,.3);
+    }
+
+    .btn-back svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      transition: transform .3s ease;
+    }
+
+    .btn-back:hover svg {
+      transform: translateX(-3px);
+    }
+
+    /* Card container */
+    .card-container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      width: 100%;
+    }
+
+    /* Card */
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(145deg, rgba(5,12,26,.85), rgba(2,7,16,.90));
+      border: 1px solid rgba(0,212,216,.25);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      transition: transform .4s ease, box-shadow .4s ease, border .4s ease;
+      box-shadow: 
+        0 8px 32px rgba(0,0,0,.5),
+        inset 0 1px 0 rgba(0,245,255,.08);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      background: linear-gradient(135deg, rgba(0,212,216,.15), transparent 50%, rgba(255,107,26,.12));
+      border-radius: 16px;
+      opacity: 0;
+      transition: opacity .4s ease;
+      z-index: -1;
+    }
+
+    .card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(0,245,255,.5);
+      box-shadow: 
+        0 16px 48px rgba(0,212,216,.25),
+        0 0 32px rgba(255,107,26,.15),
+        inset 0 1px 0 rgba(0,245,255,.15);
+    }
+
+    .card:hover::before { opacity: 1; }
+
+    /* Card visual */
+    .card-visual {
+      position: relative;
+      width: 100%;
+      background: linear-gradient(160deg, rgba(0,75,255,.08) 0%, rgba(0,212,216,.06) 50%, rgba(255,107,26,.05) 100%);
+      overflow: hidden;
+      padding: 3rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    .card-visual svg {
+      width: 100%;
+      max-width: 400px;
+      height: auto;
+      filter: drop-shadow(0 0 20px rgba(0,212,216,.4));
+    }
+
+    .card-tag {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .18em;
+      color: var(--amber);
+      border: 1px solid var(--amber);
+      padding: .35rem .9rem;
+      border-radius: 3px;
+      background: rgba(255,190,0,.08);
+      animation: tagPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes tagPulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(255,190,0,.3); }
+      50%       { box-shadow: 0 0 20px rgba(255,190,0,.6); }
+    }
+
+    /* Card body */
+    .card-body {
+      padding: 2.5rem 2rem 2.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .card-num {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .2em;
+      color: var(--cyan);
+      opacity: .7;
+      text-transform: uppercase;
+    }
+
+    .card-title {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      line-height: 1.2;
+      background: linear-gradient(135deg, var(--cyan), var(--teal) 40%, var(--amber));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 12px rgba(0,212,216,.4));
+    }
+
+    .card-desc {
+      font-size: 1.1rem;
+      line-height: 1.7;
+      color: rgba(224,247,250,.8);
+      letter-spacing: .02em;
+    }
+
+    /* Images section */
+    .images-section {
+      margin-top: 1rem;
+    }
+
+    .images-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .image-card {
+      background: rgba(0,212,216,.04);
+      border: 1px solid rgba(0,212,216,.2);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all .3s ease;
+    }
+
+    .image-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--cyan);
+      box-shadow: 0 8px 24px rgba(0,212,216,.3);
+    }
+
+    .image-card img {
+      width: 100%;
+      height: 280px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .image-caption {
+      padding: 1rem 1.2rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .8rem;
+      letter-spacing: .08em;
+      color: var(--cyan);
+      text-align: center;
+      background: rgba(0,0,0,.3);
+    }
+
+    /* Content sections */
+    .content-section {
+      background: rgba(0,212,216,.04);
+      border: 1px solid rgba(0,212,216,.15);
+      border-radius: 10px;
+      padding: 1.8rem;
+      transition: all .3s ease;
+    }
+
+    .content-section:hover {
+      background: rgba(0,212,216,.08);
+      border-color: rgba(0,245,255,.3);
+      transform: translateX(5px);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .section-icon {
+      font-size: 1.8rem;
+    }
+
+    .section-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--cyan);
+    }
+
+    .section-content {
+      color: rgba(224,247,250,.85);
+      line-height: 1.8;
+      font-size: 1.05rem;
+    }
+
+    .section-content p {
+      margin-bottom: 1rem;
+    }
+
+    .section-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .highlight {
+      color: var(--amber);
+      font-weight: 600;
+    }
+
+    .code-inline {
+      background: rgba(0,212,216,.1);
+      border: 1px solid rgba(0,212,216,.2);
+      padding: .15rem .5rem;
+      border-radius: 4px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .9em;
+      color: var(--cyan);
+    }
+
+    /* Info list */
+    .info-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 1rem;
+    }
+
+    .info-list li {
+      padding-left: 1.8rem;
+      position: relative;
+      margin-bottom: .8rem;
+      line-height: 1.7;
+    }
+
+    .info-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--orange);
+      font-weight: bold;
+      font-size: 1.2em;
+    }
+
+    /* Code block */
+    .code-block {
+      background: rgba(2,7,16,.8);
+      border: 1px solid rgba(0,212,216,.2);
+      border-radius: 8px;
+      padding: 1.5rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .9rem;
+      color: var(--cyan);
+      margin: 1.5rem 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      display: block;
+      white-space: pre;
+      line-height: 1.6;
+    }
+
+    .code-comment {
+      color: rgba(224,247,250,.5);
+    }
+
+    .code-keyword {
+      color: var(--orange);
+    }
+
+    .code-function {
+      color: var(--amber);
+    }
+
+    .code-number {
+      color: #ff6ec7;
+    }
+
+    /* Topics pills */
+    .card-topics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .7rem;
+      margin-top: 1.5rem;
+    }
+
+    .topic-pill {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .12em;
+      padding: .45rem .95rem;
+      background: rgba(0,212,216,.08);
+      border: 1px solid rgba(0,212,216,.3);
+      border-radius: 20px;
+      color: var(--cyan);
+      transition: all .3s ease;
+      white-space: nowrap;
+    }
+
+    .topic-pill:hover {
+      background: rgba(0,212,216,.15);
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,212,216,.3);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      .btn-back {
+        top: 1rem;
+        left: 1rem;
+        padding: .6rem 1.2rem;
+        font-size: .75rem;
+      }
+      .card-visual { padding: 2rem 1rem; min-height: 250px; }
+      .card-body { padding: 2rem 1.5rem; }
+      .content-section { padding: 1.5rem; }
+      .images-grid {
+        grid-template-columns: 1fr;
+      }
+      .image-card img {
+        height: 220px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<!-- Botón de regreso -->
+<a href="index.html" class="btn-back">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"></line>
+    <polyline points="12 19 5 12 12 5"></polyline>
+  </svg>
+  VOLVER AL PORTAFOLIO
+</a>
+
+<div class="card-container">
+  <article class="card">
+    
+    <!-- Visual Header -->
+    <div class="card-visual">
+      <svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <radialGradient id="lightGlow">
+            <stop offset="0%" style="stop-color:#ffbe00;stop-opacity:0.8"/>
+            <stop offset="100%" style="stop-color:#ffbe00;stop-opacity:0"/>
+          </radialGradient>
+        </defs>
+        
+        <!-- Fotoresistencia -->
+        <ellipse cx="120" cy="100" rx="25" ry="35" fill="#8b7355" stroke="#d2b48c" stroke-width="2"/>
+        <path d="M 105 70 Q 120 65, 135 70" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 105 80 Q 120 75, 135 80" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 105 90 Q 120 85, 135 90" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 105 100 Q 120 95, 135 100" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 105 110 Q 120 105, 135 110" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 105 120 Q 120 115, 135 120" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <path d="M 105 130 Q 120 125, 135 130" stroke="#d2b48c" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <line x1="120" y1="50" x2="120" y2="65" stroke="#c0c0c0" stroke-width="4"/>
+        <line x1="120" y1="135" x2="120" y2="150" stroke="#c0c0c0" stroke-width="4"/>
+        <text x="120" y="170" text-anchor="middle" font-family="monospace" font-size="10" fill="#00d4d8" font-weight="bold">LDR</text>
+        
+        <!-- Rayos de luz -->
+        <g opacity="0.7">
+          <line x1="60" y1="60" x2="95" y2="80" stroke="#ffbe00" stroke-width="2">
+            <animate attributeName="opacity" values="0.3;0.9;0.3" dur="2s" repeatCount="indefinite"/>
+          </line>
+          <line x1="70" y1="50" x2="100" y2="75" stroke="#ffbe00" stroke-width="2">
+            <animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" repeatCount="indefinite"/>
+          </line>
+          <line x1="80" y1="40" x2="105" y2="70" stroke="#ffbe00" stroke-width="2">
+            <animate attributeName="opacity" values="0.3;0.8;0.3" dur="1.8s" repeatCount="indefinite"/>
+          </line>
+        </g>
+        
+        <!-- Sol/Luz -->
+        <circle cx="50" cy="40" r="15" fill="url(#lightGlow)"/>
+        <circle cx="50" cy="40" r="10" fill="#ffbe00" filter="url(#glow)">
+          <animate attributeName="r" values="9;11;9" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        
+        <!-- Arduino -->
+        <rect x="240" y="60" width="120" height="80" rx="6" fill="#006064" stroke="#00d4d8" stroke-width="2"/>
+        <rect x="280" y="80" width="40" height="25" rx="2" fill="#1a2332" stroke="#00f5ff" stroke-width="1.5"/>
+        <text x="300" y="95" text-anchor="middle" font-family="monospace" font-size="7" fill="#00f5ff" font-weight="bold">Arduino</text>
+        <text x="300" y="105" text-anchor="middle" font-family="monospace" font-size="6" fill="#ffbe00">UNO</text>
+        
+        <!-- Pines -->
+        <rect x="250" y="70" width="3" height="6" fill="#ff6b1a"/>
+        <rect x="258" y="70" width="3" height="6" fill="#ff6b1a"/>
+        <rect x="330" y="70" width="3" height="6" fill="#ffbe00"/>
+        <rect x="338" y="70" width="3" height="6" fill="#ffbe00"/>
+        
+        <!-- LED -->
+        <ellipse cx="300" cy="160" rx="12" ry="14" fill="#ff6b1a" opacity="0.5" filter="url(#glow)">
+          <animate attributeName="opacity" values="0.3;0.8;0.3" dur="1.5s" repeatCount="indefinite"/>
+        </ellipse>
+        <circle cx="300" cy="158" r="8" fill="#ffbe00">
+          <animate attributeName="opacity" values="0.6;1;0.6" dur="1.5s" repeatCount="indefinite"/>
+        </circle>
+        
+        <!-- Conexiones -->
+        <path d="M 120 150 L 120 180 L 240 180 L 240 100" stroke="#00d4d8" stroke-width="3" fill="none"/>
+        <path d="M 360 100 L 360 160 L 315 160" stroke="#ff6b1a" stroke-width="3" fill="none"/>
+        
+        <!-- Etiquetas -->
+        <text x="200" y="25" text-anchor="middle" font-family="Orbitron" font-size="14" fill="#00f5ff" font-weight="bold">SISTEMA DE ILUMINACIÓN AUTOMÁTICA</text>
+      </svg>
+      <span class="card-tag">SENSOR LDR</span>
+    </div>
+
+    <!-- Body -->
+    <div class="card-body">
+      <span class="card-num">// 01 — SENSOR DE LUZ</span>
+      <h3 class="card-title">Fotoresistencia (LDR)<br>Control de Iluminación</h3>
+      <p class="card-desc">
+        Sistema automático de iluminación que utiliza una fotoresistencia (LDR - Light Dependent Resistor) para detectar la cantidad de luz ambiental y controlar LEDs en función de las condiciones de luminosidad.
+      </p>
+
+      <!-- Images Section -->
+      <div class="images-section">
+        <div class="images-grid">
+          <div class="image-card">
+            <img src="foto.png" alt="Diagrama del circuito con fotoresistencia">
+            <div class="image-caption">Diagrama Esquemátic o del Circuito</div>
+          </div>
+          <div class="image-card">
+            <img src="torre.png" alt="Proyecto real con Torre Eiffel iluminada">
+            <div class="image-caption">Proyecto Real - Torre Eiffel Iluminada</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ¿Qué es una Fotoresistencia? -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">💡</span>
+          <h4 class="section-title">¿Qué es una Fotoresistencia?</h4>
+        </div>
+        <div class="section-content">
+          <p>
+            Una <span class="highlight">fotoresistencia o LDR</span> (Light Dependent Resistor) es un componente electrónico cuya resistencia eléctrica varía en función de la cantidad de luz que incide sobre él.
+          </p>
+          <ul class="info-list">
+            <li><strong>Con mucha luz:</strong> La resistencia disminuye (puede bajar a ~100Ω)</li>
+            <li><strong>Con poca luz:</strong> La resistencia aumenta (puede llegar a ~1MΩ)</li>
+            <li><strong>Principio:</strong> Efecto fotoeléctrico - los fotones liberan electrones</li>
+            <li><strong>Material:</strong> Sulfuro de cadmio (CdS) u otros semiconductores</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Cómo Funciona el Circuito -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">⚡</span>
+          <h4 class="section-title">Cómo Funciona el Circuito</h4>
+        </div>
+        <div class="section-content">
+          <p>
+            El circuito crea un <span class="highlight">divisor de voltaje</span> con la fotoresistencia y una resistencia fija de 10kΩ. Arduino lee el voltaje en el punto medio a través de un pin analógico.
+          </p>
+          
+          <p><strong>Proceso de funcionamiento:</strong></p>
+          <ul class="info-list">
+            <li><strong>Divisor de Voltaje:</strong> LDR + Resistencia 10kΩ conectadas entre 5V y GND</li>
+            <li><strong>Lectura Analógica:</strong> Arduino lee el voltaje en el pin A0 (0-1023)</li>
+            <li><strong>Procesamiento:</strong> El código compara el valor con un umbral definido</li>
+            <li><strong>Acción:</strong> Si hay poca luz (valor alto), enciende los LEDs automáticamente</li>
+          </ul>
+
+          <p style="margin-top: 1.5rem;">
+            <strong>Fórmula del divisor de voltaje:</strong><br>
+            <span class="code-inline">V_out = V_in × (R2 / (R1 + R2))</span>
+          </p>
+          <p>
+            Donde R1 es la LDR y R2 es la resistencia de 10kΩ. Cuando oscurece, la LDR aumenta su resistencia, aumentando el voltaje leído en A0.
+          </p>
+        </div>
+      </div>
+
+      <!-- Componentes del Circuito -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">🔧</span>
+          <h4 class="section-title">Componentes del Circuito</h4>
+        </div>
+        <div class="section-content">
+          <ul class="info-list">
+            <li><strong>Arduino UNO:</strong> Microcontrolador que lee el sensor y controla los LEDs</li>
+            <li><strong>Fotoresistencia (LDR):</strong> Sensor de luz variable (típicamente 5-10mm)</li>
+            <li><strong>Resistencia 10kΩ:</strong> Para formar el divisor de voltaje con la LDR</li>
+            <li><strong>LEDs:</strong> Rojo, amarillo y verde para indicación visual (como en el proyecto de la Torre Eiffel)</li>
+            <li><strong>Resistencias 220Ω:</strong> Una por cada LED para limitar corriente</li>
+            <li><strong>Protoboard y cables:</strong> Para realizar las conexiones</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Código de Ejemplo -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">💻</span>
+          <h4 class="section-title">Código de Ejemplo</h4>
+        </div>
+        <div class="section-content">
+          <p>Este es un ejemplo básico de cómo programar Arduino para que encienda LEDs cuando detecte oscuridad:</p>
+          
+          <div class="code-block"><code><span class="code-comment">// Definir pines</span>
+<span class="code-keyword">const int</span> pinLDR = <span class="code-number">A0</span>;        <span class="code-comment">// Pin analógico para LDR</span>
+<span class="code-keyword">const int</span> ledRojo = <span class="code-number">9</span>;       <span class="code-comment">// LED rojo</span>
+<span class="code-keyword">const int</span> ledVerde = <span class="code-number">10</span>;     <span class="code-comment">// LED verde</span>
+<span class="code-keyword">const int</span> ledAmarillo = <span class="code-number">11</span>;  <span class="code-comment">// LED amarillo</span>
+
+<span class="code-keyword">int</span> valorLuz;
+<span class="code-keyword">int</span> umbral = <span class="code-number">500</span>;  <span class="code-comment">// Ajustar según necesidad</span>
+
+<span class="code-keyword">void</span> <span class="code-function">setup</span>() {
+  <span class="code-function">pinMode</span>(ledRojo, OUTPUT);
+  <span class="code-function">pinMode</span>(ledVerde, OUTPUT);
+  <span class="code-function">pinMode</span>(ledAmarillo, OUTPUT);
+  Serial.<span class="code-function">begin</span>(<span class="code-number">9600</span>);
+}
+
+<span class="code-keyword">void</span> <span class="code-function">loop</span>() {
+  valorLuz = <span class="code-function">analogRead</span>(pinLDR);
+  Serial.<span class="code-function">println</span>(valorLuz);  <span class="code-comment">// Monitorear valor</span>
+  
+  <span class="code-keyword">if</span> (valorLuz > umbral) {
+    <span class="code-comment">// Está oscuro - encender LEDs</span>
+    <span class="code-function">digitalWrite</span>(ledRojo, HIGH);
+    <span class="code-function">digitalWrite</span>(ledVerde, HIGH);
+    <span class="code-function">digitalWrite</span>(ledAmarillo, HIGH);
+  } <span class="code-keyword">else</span> {
+    <span class="code-comment">// Hay luz - apagar LEDs</span>
+    <span class="code-function">digitalWrite</span>(ledRojo, LOW);
+    <span class="code-function">digitalWrite</span>(ledVerde, LOW);
+    <span class="code-function">digitalWrite</span>(ledAmarillo, LOW);
+  }
+  
+  <span class="code-function">delay</span>(<span class="code-number">100</span>);
+}</code></div>
+        </div>
+      </div>
+
+      <!-- Aplicaciones Prácticas -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">🌟</span>
+          <h4 class="section-title">Aplicaciones Prácticas</h4>
+        </div>
+        <div class="section-content">
+          <ul class="info-list">
+            <li><strong>Iluminación Automática:</strong> Luces que se encienden al anochecer (como en el proyecto de la Torre Eiffel)</li>
+            <li><strong>Farolas Inteligentes:</strong> Alumbrado público que se activa según luz ambiental</li>
+            <li><strong>Sistemas de Ahorro Energético:</strong> Apagar pantallas o luces cuando hay suficiente luz natural</li>
+            <li><strong>Alarmas de Seguridad:</strong> Detectar cuando alguien tapa un sensor de luz</li>
+            <li><strong>Robots Seguidores de Luz:</strong> Robots que se mueven hacia la fuente de luz</li>
+            <li><strong>Cortinas Automáticas:</strong> Sistemas que cierran cortinas según la intensidad solar</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Consejos y Tips -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">💡</span>
+          <h4 class="section-title">Consejos y Calibración</h4>
+        </div>
+        <div class="section-content">
+          <p><strong>Para calibrar correctamente tu circuito:</strong></p>
+          <ul class="info-list">
+            <li><strong>Monitor Serial:</strong> Usa <span class="code-inline">Serial.println()</span> para ver los valores que lee la LDR</li>
+            <li><strong>Ajustar Umbral:</strong> El valor de umbral depende de tu ambiente. Prueba en diferentes condiciones</li>
+            <li><strong>Posicionamiento:</strong> Coloca la LDR donde reciba luz ambiental, no luz directa del LED</li>
+            <li><strong>Histéresis:</strong> Implementa dos umbrales (encendido y apagado) para evitar parpadeos</li>
+            <li><strong>Protección:</strong> La LDR no tiene polaridad, puede conectarse en cualquier dirección</li>
+            <li><strong>Tiempo de Respuesta:</strong> Las LDR tienen respuesta lenta (~100ms), considera esto en tu código</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Topics -->
+      <div class="card-topics">
+        <span class="topic-pill">SENSOR LDR</span>
+        <span class="topic-pill">ENTRADA ANALÓGICA</span>
+        <span class="topic-pill">DIVISOR VOLTAJE</span>
+        <span class="topic-pill">AUTOMATIZACIÓN</span>
+        <span class="topic-pill">ILUMINACIÓN</span>
+        <span class="topic-pill">AHORRO ENERGÉTICO</span>
+      </div>
+
+    </div>
+  </article>
+</div>
+
+<!-- Scripts -->
+<script>
+  /* Animated particles on canvas */
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const COLORS = ['rgba(0,212,216,', 'rgba(255,107,26,', 'rgba(255,190,0,', 'rgba(0,245,255,'];
+
+  function mkParticle() {
+    const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.5 + .4,
+      vx: (Math.random() - .5) * .4,
+      vy: (Math.random() - .5) * .4,
+      alpha: Math.random() * .6 + .2,
+      color: c,
+      pulse: Math.random() * Math.PI * 2
+    };
+  }
+  for (let i = 0; i < 90; i++) particles.push(mkParticle());
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach((p, i) => {
+      p.pulse += .02;
+      const a = p.alpha * (.7 + .3 * Math.sin(p.pulse));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color + a + ')';
+      ctx.fill();
+
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+
+      /* Draw lines to nearby particles */
+      for (let j = i + 1; j < particles.length; j++) {
+        const q = particles[j];
+        const dx = p.x - q.x, dy = p.y - q.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 90) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.strokeStyle = p.color + ((.18 - dist/500) * a) + ')';
+          ctx.lineWidth = .5;
+          ctx.stroke();
+        }
+      }
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LED RGB - Control de Color con Arduino</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --teal:    #00d4d8;
+      --cyan:    #00f5ff;
+      --blue:    #0a4bff;
+      --orange:  #ff6b1a;
+      --amber:   #ffbe00;
+      --warm:    #ff4e1a;
+      --dark:    #050c1a;
+      --darker:  #020710;
+      --glass:   rgba(0,212,216,0.07);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background: var(--darker);
+      color: #e0f7fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    #bgCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .btn-back {
+      position: fixed;
+      top: 2rem;
+      left: 2rem;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .85rem;
+      letter-spacing: .08em;
+      color: var(--cyan);
+      background: rgba(0,212,216,.08);
+      border: 1px solid rgba(0,212,216,.3);
+      padding: .75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all .3s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn-back:hover {
+      background: rgba(0,212,216,.15);
+      border-color: var(--cyan);
+      transform: translateX(-5px);
+      box-shadow: 0 4px 20px rgba(0,212,216,.3);
+    }
+
+    .btn-back svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      transition: transform .3s ease;
+    }
+
+    .btn-back:hover svg {
+      transform: translateX(-3px);
+    }
+
+    .card-container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      width: 100%;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(145deg, rgba(5,12,26,.85), rgba(2,7,16,.90));
+      border: 1px solid rgba(0,212,216,.25);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      transition: transform .4s ease, box-shadow .4s ease, border .4s ease;
+      box-shadow: 
+        0 8px 32px rgba(0,0,0,.5),
+        inset 0 1px 0 rgba(0,245,255,.08);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      background: linear-gradient(135deg, rgba(255,50,150,.15), transparent 50%, rgba(50,100,255,.12));
+      border-radius: 16px;
+      opacity: 0;
+      transition: opacity .4s ease;
+      z-index: -1;
+    }
+
+    .card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(0,245,255,.5);
+      box-shadow: 
+        0 16px 48px rgba(0,212,216,.25),
+        0 0 32px rgba(255,50,150,.15),
+        inset 0 1px 0 rgba(0,245,255,.15);
+    }
+
+    .card:hover::before { opacity: 1; }
+
+    .card-visual {
+      position: relative;
+      width: 100%;
+      background: linear-gradient(160deg, rgba(255,0,100,.06) 0%, rgba(0,212,216,.06) 50%, rgba(0,50,255,.06) 100%);
+      overflow: hidden;
+      padding: 3rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+
+    .card-visual svg {
+      width: 100%;
+      max-width: 400px;
+      height: auto;
+      filter: drop-shadow(0 0 20px rgba(200,100,255,.4));
+    }
+
+    .card-tag {
+      position: absolute;
+      top: 1.5rem;
+      right: 1.5rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .18em;
+      color: var(--amber);
+      border: 1px solid var(--amber);
+      padding: .35rem .9rem;
+      border-radius: 3px;
+      background: rgba(255,190,0,.08);
+      animation: tagPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes tagPulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(255,190,0,.3); }
+      50%       { box-shadow: 0 0 20px rgba(255,190,0,.6); }
+    }
+
+    .card-body {
+      padding: 2.5rem 2rem 2.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .card-num {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .2em;
+      color: var(--cyan);
+      opacity: .7;
+      text-transform: uppercase;
+    }
+
+    .card-title {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #ff3366, #aa44ff 40%, #4488ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 12px rgba(180,50,255,.4));
+    }
+
+    .card-desc {
+      font-size: 1.1rem;
+      line-height: 1.7;
+      color: rgba(224,247,250,.8);
+      letter-spacing: .02em;
+    }
+
+    .images-section {
+      margin-top: 1rem;
+    }
+
+    .images-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .image-card {
+      background: rgba(0,212,216,.04);
+      border: 1px solid rgba(0,212,216,.2);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all .3s ease;
+    }
+
+    .image-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--cyan);
+      box-shadow: 0 8px 24px rgba(0,212,216,.3);
+    }
+
+    .image-card img {
+      width: 100%;
+      height: 280px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .image-caption {
+      padding: 1rem 1.2rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .8rem;
+      letter-spacing: .08em;
+      color: var(--cyan);
+      text-align: center;
+      background: rgba(0,0,0,.3);
+    }
+
+    .content-section {
+      background: rgba(0,212,216,.04);
+      border: 1px solid rgba(0,212,216,.15);
+      border-radius: 10px;
+      padding: 1.8rem;
+      transition: all .3s ease;
+    }
+
+    .content-section:hover {
+      background: rgba(0,212,216,.08);
+      border-color: rgba(0,245,255,.3);
+      transform: translateX(5px);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .section-icon {
+      font-size: 1.8rem;
+    }
+
+    .section-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--cyan);
+    }
+
+    .section-content {
+      color: rgba(224,247,250,.85);
+      line-height: 1.8;
+      font-size: 1.05rem;
+    }
+
+    .section-content p {
+      margin-bottom: 1rem;
+    }
+
+    .section-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .highlight {
+      color: var(--amber);
+      font-weight: 600;
+    }
+
+    .highlight-r { color: #ff4466; font-weight: 600; }
+    .highlight-g { color: #44ff88; font-weight: 600; }
+    .highlight-b { color: #4488ff; font-weight: 600; }
+
+    .code-inline {
+      background: rgba(0,212,216,.1);
+      border: 1px solid rgba(0,212,216,.2);
+      padding: .15rem .5rem;
+      border-radius: 4px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .9em;
+      color: var(--cyan);
+    }
+
+    .info-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 1rem;
+    }
+
+    .info-list li {
+      padding-left: 1.8rem;
+      position: relative;
+      margin-bottom: .8rem;
+      line-height: 1.7;
+    }
+
+    .info-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--orange);
+      font-weight: bold;
+      font-size: 1.2em;
+    }
+
+    .code-block {
+      background: rgba(2,7,16,.8);
+      border: 1px solid rgba(0,212,216,.2);
+      border-radius: 8px;
+      padding: 1.5rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .9rem;
+      color: var(--cyan);
+      margin: 1.5rem 0;
+      overflow-x: auto;
+    }
+
+    .code-block code {
+      display: block;
+      white-space: pre;
+      line-height: 1.6;
+    }
+
+    .code-comment  { color: rgba(224,247,250,.5); }
+    .code-keyword  { color: var(--orange); }
+    .code-function { color: var(--amber); }
+    .code-number   { color: #ff6ec7; }
+
+    /* Color swatches for RGB table */
+    .rgb-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .9rem;
+    }
+
+    .rgb-table th {
+      color: var(--cyan);
+      border-bottom: 1px solid rgba(0,212,216,.3);
+      padding: .6rem .8rem;
+      text-align: left;
+    }
+
+    .rgb-table td {
+      padding: .55rem .8rem;
+      border-bottom: 1px solid rgba(0,212,216,.08);
+      color: rgba(224,247,250,.85);
+    }
+
+    .swatch {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      margin-right: .5rem;
+      vertical-align: middle;
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .card-topics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .7rem;
+      margin-top: 1.5rem;
+    }
+
+    .topic-pill {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: .7rem;
+      letter-spacing: .12em;
+      padding: .45rem .95rem;
+      background: rgba(0,212,216,.08);
+      border: 1px solid rgba(0,212,216,.3);
+      border-radius: 20px;
+      color: var(--cyan);
+      transition: all .3s ease;
+      white-space: nowrap;
+    }
+
+    .topic-pill:hover {
+      background: rgba(0,212,216,.15);
+      border-color: var(--cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,212,216,.3);
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      .btn-back {
+        top: 1rem;
+        left: 1rem;
+        padding: .6rem 1.2rem;
+        font-size: .75rem;
+      }
+      .card-visual { padding: 2rem 1rem; min-height: 250px; }
+      .card-body { padding: 2rem 1.5rem; }
+      .content-section { padding: 1.5rem; }
+      .images-grid { grid-template-columns: 1fr; }
+      .image-card img { height: 220px; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<a href="index.html" class="btn-back">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12"></line>
+    <polyline points="12 19 5 12 12 5"></polyline>
+  </svg>
+  VOLVER AL PORTAFOLIO
+</a>
+
+<div class="card-container">
+  <article class="card">
+
+    <!-- Visual Header -->
+    <div class="card-visual">
+      <svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <radialGradient id="rgbGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   style="stop-color:#ff0055;stop-opacity:0.6"/>
+            <stop offset="33%"  style="stop-color:#00ff88;stop-opacity:0.4"/>
+            <stop offset="66%"  style="stop-color:#0055ff;stop-opacity:0.4"/>
+            <stop offset="100%" style="stop-color:#000;stop-opacity:0"/>
+          </radialGradient>
+        </defs>
+
+        <!-- Title -->
+        <text x="200" y="22" text-anchor="middle" font-family="Orbitron" font-size="13" fill="#00f5ff" font-weight="bold">CONTROL DE COLOR — LED RGB</text>
+
+        <!-- LED RGB body -->
+        <ellipse cx="120" cy="110" rx="18" ry="22" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+        <!-- LED dome -->
+        <ellipse cx="120" cy="96" rx="18" ry="10" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+        <!-- Colored glow inside dome -->
+        <ellipse cx="120" cy="96" rx="14" ry="7" filter="url(#glow)">
+          <animate attributeName="fill" values="#ff0055;#00ff88;#0055ff;#ff00ff;#ffaa00;#ff0055" dur="4s" repeatCount="indefinite"/>
+        </ellipse>
+        <!-- Outer color halo -->
+        <ellipse cx="120" cy="96" rx="26" ry="16" opacity="0.35" filter="url(#glow)">
+          <animate attributeName="fill" values="#ff0055;#00ff88;#0055ff;#ff00ff;#ffaa00;#ff0055" dur="4s" repeatCount="indefinite"/>
+        </ellipse>
+
+        <!-- 4 legs: R, GND, G, B -->
+        <line x1="107" y1="130" x2="100" y2="155" stroke="#ff4466" stroke-width="2.5"/>
+        <line x1="114" y1="132" x2="112" y2="155" stroke="#c0c0c0" stroke-width="2.5"/>
+        <line x1="126" y1="132" x2="128" y2="155" stroke="#44ff88" stroke-width="2.5"/>
+        <line x1="133" y1="130" x2="140" y2="155" stroke="#4488ff" stroke-width="2.5"/>
+
+        <!-- Leg labels -->
+        <text x="96"  y="165" text-anchor="middle" font-family="monospace" font-size="8" fill="#ff4466">R</text>
+        <text x="111" y="165" text-anchor="middle" font-family="monospace" font-size="8" fill="#c0c0c0">–</text>
+        <text x="129" y="165" text-anchor="middle" font-family="monospace" font-size="8" fill="#44ff88">G</text>
+        <text x="143" y="165" text-anchor="middle" font-family="monospace" font-size="8" fill="#4488ff">B</text>
+
+        <!-- Color mixing circles -->
+        <circle cx="60" cy="75" r="16" fill="#ff0044" opacity="0.55" filter="url(#glow)"/>
+        <circle cx="80" cy="65" r="16" fill="#00cc55" opacity="0.45" filter="url(#glow)"/>
+        <circle cx="70" cy="88" r="16" fill="#0044ff" opacity="0.50" filter="url(#glow)"/>
+        <!-- White intersection -->
+        <circle cx="70" cy="76" r="7"  fill="white" opacity="0.5" filter="url(#glow)"/>
+
+        <!-- Arduino -->
+        <rect x="240" y="60" width="120" height="80" rx="6" fill="#006064" stroke="#00d4d8" stroke-width="2"/>
+        <rect x="280" y="78" width="40" height="28" rx="2" fill="#1a2332" stroke="#00f5ff" stroke-width="1.5"/>
+        <text x="300" y="94"  text-anchor="middle" font-family="monospace" font-size="7" fill="#00f5ff" font-weight="bold">Arduino</text>
+        <text x="300" y="104" text-anchor="middle" font-family="monospace" font-size="6" fill="#ffbe00">UNO</text>
+
+        <!-- PWM pin labels -->
+        <rect x="250" y="68" width="4" height="7" fill="#ff4466"/>
+        <rect x="260" y="68" width="4" height="7" fill="#44ff88"/>
+        <rect x="270" y="68" width="4" height="7" fill="#4488ff"/>
+        <text x="252" y="62" text-anchor="middle" font-family="monospace" font-size="6" fill="#ff4466">~9</text>
+        <text x="262" y="62" text-anchor="middle" font-family="monospace" font-size="6" fill="#44ff88">~10</text>
+        <text x="272" y="62" text-anchor="middle" font-family="monospace" font-size="6" fill="#4488ff">~11</text>
+
+        <!-- Connection wires -->
+        <path d="M 100 155 L 100 175 L 252 175 L 252 75" stroke="#ff4466" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+        <path d="M 128 155 L 128 180 L 262 180 L 262 75" stroke="#44ff88" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+        <path d="M 140 155 L 140 185 L 272 185 L 272 75" stroke="#4488ff" stroke-width="2" fill="none" stroke-dasharray="4,2"/>
+
+        <!-- Resistors on wires -->
+        <rect x="88"  y="153" width="16" height="6" rx="2" fill="#cc8800" stroke="#ffbe00" stroke-width="1"/>
+        <rect x="116" y="153" width="16" height="6" rx="2" fill="#cc8800" stroke="#ffbe00" stroke-width="1"/>
+        <rect x="128" y="153" width="16" height="6" rx="2" fill="#cc8800" stroke="#ffbe00" stroke-width="1"/>
+      </svg>
+      <span class="card-tag">PWM / COLOR</span>
+    </div>
+
+    <!-- Body -->
+    <div class="card-body">
+      <span class="card-num">// 02 — SALIDA ANALÓGICA</span>
+      <h3 class="card-title">LED RGB<br>Control de Color</h3>
+      <p class="card-desc">
+        Sistema de control de color que utiliza un LED RGB (Red-Green-Blue) y las salidas PWM de Arduino para mezclar cualquier color del espectro visible, desde rojo puro hasta blanco y miles de tonos intermedios.
+      </p>
+
+      <!-- Images Section -->
+      <div class="images-section">
+        <div class="images-grid">
+          <div class="image-card">
+            <img src="led.png" alt="Diagrama de circuito LED RGB con Arduino">
+            <div class="image-caption">Diagrama Esquemático del Circuito</div>
+          </div>
+          <div class="image-card">
+            <img src="1000161299.jpeg" alt="Proyecto real LED RGB en protoboard">
+            <div class="image-caption">Proyecto Real — LED RGB en Protoboard</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ¿Qué es un LED RGB? -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">🌈</span>
+          <h4 class="section-title">¿Qué es un LED RGB?</h4>
+        </div>
+        <div class="section-content">
+          <p>
+            Un <span class="highlight">LED RGB</span> es un componente que integra en un solo encapsulado tres diodos LED independientes: uno <span class="highlight-r">Rojo (Red)</span>, uno <span class="highlight-g">Verde (Green)</span> y uno <span class="highlight-b">Azul (Blue)</span>. Al variar la intensidad de cada color se obtiene cualquier tono visible.
+          </p>
+          <ul class="info-list">
+            <li><strong>Cátodo común:</strong> El pin más largo (GND) es compartido por los tres LEDs internos</li>
+            <li><strong>Ánodo común:</strong> Variante donde el pin largo va a 5V y los pines de color van a GND</li>
+            <li><strong>4 pines:</strong> R, GND (o VCC), G, B — el pin GND suele ser el más largo</li>
+            <li><strong>Modelo de color:</strong> Síntesis aditiva — mezclar R+G+B en plena intensidad produce blanco</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- PWM: la clave del control de color -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">⚡</span>
+          <h4 class="section-title">PWM: La Clave del Control de Color</h4>
+        </div>
+        <div class="section-content">
+          <p>
+            Arduino no puede variar su voltaje de salida, pero sí puede simular niveles intermedios usando <span class="highlight">PWM (Pulse Width Modulation)</span>. En los pines marcados con <span class="code-inline">~</span>, el microcontrolador enciende y apaga el pin miles de veces por segundo.
+          </p>
+          <p><strong>Proceso de funcionamiento:</strong></p>
+          <ul class="info-list">
+            <li><strong>Ciclo de trabajo (duty cycle):</strong> Un valor de 0 apaga el LED, 255 lo enciende al máximo</li>
+            <li><strong>Frecuencia PWM:</strong> ~490 Hz en pines 9 y 10, ~980 Hz en pin 11 del Arduino UNO</li>
+            <li><strong>Mezcla de colores:</strong> Cada canal R, G y B acepta un valor de 0–255 independiente</li>
+            <li><strong>Millones de colores:</strong> 256 × 256 × 256 = 16.7 millones de combinaciones posibles</li>
+          </ul>
+          <p style="margin-top: 1.5rem;">
+            <strong>Fórmula de color en código:</strong><br>
+            <span class="code-inline">analogWrite(pinR, rojo);</span> — controla la intensidad del canal rojo (0–255)
+          </p>
+        </div>
+      </div>
+
+      <!-- Componentes del Circuito -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">🔧</span>
+          <h4 class="section-title">Componentes del Circuito</h4>
+        </div>
+        <div class="section-content">
+          <ul class="info-list">
+            <li><strong>Arduino UNO:</strong> Microcontrolador con pines PWM (~9, ~10, ~11) para controlar el LED</li>
+            <li><strong>LED RGB (cátodo común):</strong> El componente principal con 4 pines: R, GND, G, B</li>
+            <li><strong>Resistencia 220Ω para R:</strong> El canal rojo consume más corriente y necesita protección</li>
+            <li><strong>Resistencia 220Ω para G:</strong> Limita la corriente del canal verde</li>
+            <li><strong>Resistencia 220Ω para B:</strong> Limita la corriente del canal azul</li>
+            <li><strong>Protoboard y cables:</strong> Para realizar las conexiones sin soldadura</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Tabla de colores -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">🎨</span>
+          <h4 class="section-title">Colores Comunes y sus Valores</h4>
+        </div>
+        <div class="section-content">
+          <p>Ejemplos de valores <span class="highlight">R, G, B</span> (0–255) para colores habituales:</p>
+          <table class="rgb-table">
+            <thead>
+              <tr>
+                <th>Color</th>
+                <th>R</th>
+                <th>G</th>
+                <th>B</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="swatch" style="background:#ff0000;color:#ff0000">●</span>Rojo</td>
+                <td>255</td><td>0</td><td>0</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#00ff00;color:#00ff00">●</span>Verde</td>
+                <td>0</td><td>255</td><td>0</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#0000ff;color:#0000ff">●</span>Azul</td>
+                <td>0</td><td>0</td><td>255</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#ffff00;color:#ffff00">●</span>Amarillo</td>
+                <td>255</td><td>255</td><td>0</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#ff00ff;color:#ff00ff">●</span>Magenta</td>
+                <td>255</td><td>0</td><td>255</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#00ffff;color:#00ffff">●</span>Cian</td>
+                <td>0</td><td>255</td><td>255</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#ffffff;color:#aaa">●</span>Blanco</td>
+                <td>255</td><td>255</td><td>255</td>
+              </tr>
+              <tr>
+                <td><span class="swatch" style="background:#ff6600;color:#ff6600">●</span>Naranja</td>
+                <td>255</td><td>100</td><td>0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Código de Ejemplo -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">💻</span>
+          <h4 class="section-title">Código de Ejemplo</h4>
+        </div>
+        <div class="section-content">
+          <p>Este ejemplo hace un ciclo de colores usando <span class="code-inline">analogWrite()</span> en los pines PWM:</p>
+
+          <div class="code-block"><code><span class="code-comment">// Pines PWM para cada canal de color</span>
+<span class="code-keyword">const int</span> pinR = <span class="code-number">9</span>;   <span class="code-comment">// Canal Rojo  (~9)</span>
+<span class="code-keyword">const int</span> pinG = <span class="code-number">10</span>;  <span class="code-comment">// Canal Verde (~10)</span>
+<span class="code-keyword">const int</span> pinB = <span class="code-number">11</span>;  <span class="code-comment">// Canal Azul  (~11)</span>
+
+<span class="code-comment">// Función para establecer un color</span>
+<span class="code-keyword">void</span> <span class="code-function">setColor</span>(<span class="code-keyword">int</span> r, <span class="code-keyword">int</span> g, <span class="code-keyword">int</span> b) {
+  <span class="code-function">analogWrite</span>(pinR, r);
+  <span class="code-function">analogWrite</span>(pinG, g);
+  <span class="code-function">analogWrite</span>(pinB, b);
+}
+
+<span class="code-keyword">void</span> <span class="code-function">setup</span>() {
+  <span class="code-function">pinMode</span>(pinR, OUTPUT);
+  <span class="code-function">pinMode</span>(pinG, OUTPUT);
+  <span class="code-function">pinMode</span>(pinB, OUTPUT);
+}
+
+<span class="code-keyword">void</span> <span class="code-function">loop</span>() {
+  <span class="code-comment">// Rojo</span>
+  <span class="code-function">setColor</span>(<span class="code-number">255</span>, <span class="code-number">0</span>, <span class="code-number">0</span>);
+  <span class="code-function">delay</span>(<span class="code-number">1000</span>);
+
+  <span class="code-comment">// Verde</span>
+  <span class="code-function">setColor</span>(<span class="code-number">0</span>, <span class="code-number">255</span>, <span class="code-number">0</span>);
+  <span class="code-function">delay</span>(<span class="code-number">1000</span>);
+
+  <span class="code-comment">// Azul</span>
+  <span class="code-function">setColor</span>(<span class="code-number">0</span>, <span class="code-number">0</span>, <span class="code-number">255</span>);
+  <span class="code-function">delay</span>(<span class="code-number">1000</span>);
+
+  <span class="code-comment">// Blanco (R+G+B al máximo)</span>
+  <span class="code-function">setColor</span>(<span class="code-number">255</span>, <span class="code-number">255</span>, <span class="code-number">255</span>);
+  <span class="code-function">delay</span>(<span class="code-number">1000</span>);
+
+  <span class="code-comment">// Fade: ciclo de color continuo</span>
+  <span class="code-keyword">for</span> (<span class="code-keyword">int</span> i = <span class="code-number">0</span>; i &lt; <span class="code-number">256</span>; i++) {
+    <span class="code-function">setColor</span>(i, <span class="code-number">255</span> - i, i / <span class="code-number">2</span>);
+    <span class="code-function">delay</span>(<span class="code-number">8</span>);
+  }
+}</code></div>
+        </div>
+      </div>
+
+      <!-- Aplicaciones Prácticas -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">🌟</span>
+          <h4 class="section-title">Aplicaciones Prácticas</h4>
+        </div>
+        <div class="section-content">
+          <ul class="info-list">
+            <li><strong>Indicadores de Estado:</strong> Rojo = error, verde = OK, azul = en proceso — como un semáforo de sistema</li>
+            <li><strong>Iluminación Ambiental:</strong> Tiras LED RGB para decoración dinámica o mood lighting</li>
+            <li><strong>Retroalimentación Visual:</strong> Cambiar color según temperatura, nivel de batería o señal</li>
+            <li><strong>Juegos y Proyectos Interactivos:</strong> Botones con retroiluminación que cambia según el contexto</li>
+            <li><strong>Semáforos Inteligentes:</strong> Combinado con sensores para control de tráfico</li>
+            <li><strong>Arte Generativo:</strong> Instalaciones que cambian de color con música, movimiento o datos en tiempo real</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Consejos y Tips -->
+      <div class="content-section">
+        <div class="section-header">
+          <span class="section-icon">💡</span>
+          <h4 class="section-title">Consejos y Calibración</h4>
+        </div>
+        <div class="section-content">
+          <p><strong>Para obtener los mejores resultados con tu LED RGB:</strong></p>
+          <ul class="info-list">
+            <li><strong>Identificar tipo:</strong> Mide continuidad entre el pin largo y los demás. Si conduce, es ánodo común; si no, es cátodo común</li>
+            <li><strong>Ánodo común:</strong> Los valores se invierten — usa <span class="code-inline">255 - valor</span> en cada canal para el comportamiento esperado</li>
+            <li><strong>Resistencias individuales:</strong> Nunca compartas una sola resistencia entre los tres canales; cada uno necesita la suya</li>
+            <li><strong>Corrección gamma:</strong> El ojo humano percibe el brillo de forma no lineal. Usa tablas gamma para transiciones más suaves</li>
+            <li><strong>Pines PWM:</strong> Solo los pines marcados con <span class="code-inline">~</span> soportan <span class="code-inline">analogWrite()</span>. En Arduino UNO son: 3, 5, 6, 9, 10 y 11</li>
+            <li><strong>Corriente máxima:</strong> Cada canal soporta ~20mA. Con tres encendidos al máximo simultáneamente, el consumo total es ~60mA</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Topics -->
+      <div class="card-topics">
+        <span class="topic-pill">LED RGB</span>
+        <span class="topic-pill">SALIDA PWM</span>
+        <span class="topic-pill">MEZCLA DE COLOR</span>
+        <span class="topic-pill">analogWrite()</span>
+        <span class="topic-pill">SÍNTESIS ADITIVA</span>
+        <span class="topic-pill">ILUMINACIÓN</span>
+      </div>
+
+    </div>
+  </article>
+</div>
+
+<script>
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const COLORS = ['rgba(255,50,100,', 'rgba(50,255,120,', 'rgba(50,100,255,', 'rgba(200,50,255,'];
+
+  function mkParticle() {
+    const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+    return {
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.5 + .4,
+      vx: (Math.random() - .5) * .4,
+      vy: (Math.random() - .5) * .4,
+      alpha: Math.random() * .6 + .2,
+      color: c,
+      pulse: Math.random() * Math.PI * 2
+    };
+  }
+  for (let i = 0; i < 90; i++) particles.push(mkParticle());
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach((p, i) => {
+      p.pulse += .02;
+      const a = p.alpha * (.7 + .3 * Math.sin(p.pulse));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.color + a + ')';
+      ctx.fill();
+
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > W) p.vx *= -1;
+      if (p.y < 0 || p.y > H) p.vy *= -1;
+
+      for (let j = i + 1; j < particles.length; j++) {
+        const q = particles[j];
+        const dx = p.x - q.x, dy = p.y - q.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 90) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.strokeStyle = p.color + ((.18 - dist/500) * a) + ')';
+          ctx.lineWidth = .5;
+          ctx.stroke();
+        }
+      }
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+</script>
+
+</body>
+</html>
